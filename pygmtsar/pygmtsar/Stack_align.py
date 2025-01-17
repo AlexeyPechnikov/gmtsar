@@ -380,13 +380,15 @@ class Stack_align(Stack_dem):
         # prepare reference scene
         #self.stack_ref()
         with self.tqdm_joblib(tqdm(desc='Preparing Reference', total=len(subswaths))) as progress_bar:
-            joblib.Parallel(n_jobs=n_jobs, backend=joblib_backend)(joblib.delayed(self._align_ref_subswath)(subswath, debug=debug) for subswath in subswaths)
+            joblib.Parallel(n_jobs=n_jobs, backend=joblib_backend)\
+                (joblib.delayed(self._align_ref_subswath)(subswath, debug=debug) for subswath in subswaths)
 
         # prepare secondary images
         with self.tqdm_joblib(tqdm(desc='Aligning Repeat', total=len(dates_rep)*len(subswaths))) as progress_bar:
             # threading backend is the only one working inside Docker container to run multiple binaries in parallel
-            joblib.Parallel(n_jobs=n_jobs, backend=joblib_backend)(joblib.delayed(self._align_rep_subswath)(subswath, date, degrees=degrees, debug=debug) \
-                                           for date in dates_rep for subswath in subswaths)
+            joblib.Parallel(n_jobs=n_jobs, backend=joblib_backend)\
+                (joblib.delayed(self._align_rep_subswath)(subswath, date, degrees=degrees, debug=debug) \
+                    for date in dates_rep for subswath in subswaths)
 
         # merge subswaths, datapath and metapath converted to lists even for a single subswath, geometry merges bursts
         df = self.df.groupby(self.df.index).agg({'datetime': 'min', 'orbit': 'min', 'mission': 'min', 'polarization': 'min',
