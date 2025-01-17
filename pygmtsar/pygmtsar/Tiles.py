@@ -50,16 +50,22 @@ class Tiles(datagrid, tqdm_joblib):
         # substitute all the allowed parameters
         params = {
             'product': product,
+            'lat': lat,
+            'lon': lon,
             'product1': product1,
             'resolution': resolution,
             # 1 degree grid
             'SN2':    f'{"S" if lat<0 else "N"}{abs(lat):02}',
             'SN3':    f'{"S" if lat<0 else "N"}{abs(lat):03}',
             'WE3':    f'{"W" if lon<0 else "E"}{abs(lon):03}',
-            # 5 degree grid
+            # standalone 5 degree grid (SRTM and GLO DEM)
             'SN2x5': f'{"S" if lat<0 else "N"}{abs(lat) - (abs(lat) % 5):02}',
             'SN3x5': f'{"S" if lat<0 else "N"}{abs(lat) - (abs(lat) % 5):03}',
-            'WE3x5': f'{"W" if lon<0 else "E"}{abs(lon) - (abs(lon) % 5):03}'
+            'WE3x5': f'{"W" if lon<0 else "E"}{abs(lon) - (abs(lon) % 5):03}',
+            # 5 degree alternative grid when negative grid cells aligning differ (ALOS DEM)
+            'SN2x5alt': f'{"S" if lat < 0 else "N"}{(abs(lat) // 5 * 5 if lat >= 0 else (abs(lat) // 5 + 1) * 5):02}',
+            'SN3x5alt': f'{"S" if lat < 0 else "N"}{(abs(lat) // 5 * 5 if lat >= 0 else (abs(lat) // 5 + 1) * 5):03}',
+            'WE3x5alt': f'{"W" if lon < 0 else "E"}{(abs(lon) // 5 * 5 if lon >= 0 else (abs(lon) // 5 + 1) * 5):03}'
         }
         if debug:
             print ('DEBUG _download_tile: params', params)
@@ -314,7 +320,7 @@ class Tiles(datagrid, tqdm_joblib):
             return self.download(
                              #base_url       = 'https://www.eorc.jaxa.jp/ALOS/aw3d30/data/release_v2404/',
                              base_url       = 'https://alosdem1s.pechnikov.workers.dev',
-                             path_id        = '{SN3x5}{WE3x5}',
+                             path_id        = '{SN3x5alt}{WE3x5alt}',
                              tile_id        = '{SN3}{WE3}.zip',
                              file_id        = '{SN3}{WE3}/ALPSMLC30_{SN3}{WE3}_DSM.tif',
                              archive        = 'zip',
