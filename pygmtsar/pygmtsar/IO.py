@@ -284,7 +284,7 @@ class IO(datagrid):
 
     # 2.5e-07 is Sentinel-1 scale factor
     # use original PRM files to get binary subswath file locations
-    def open_data(self, dates=None, scale=2.5e-07, debug=False):
+    def open_data(self, dates=None, subswath=None, scale=2.5e-07, debug=False):
         import xarray as xr
         import pandas as pd
         import numpy as np
@@ -302,6 +302,7 @@ class IO(datagrid):
         subswaths = self.get_subswaths()
         if not isinstance(subswaths, (str, int)):
             subswaths = ''.join(map(str, subswaths))
+        #print ('subswaths', subswaths)
 
         if len(subswaths) == 1:
             # stack single subswath
@@ -316,9 +317,9 @@ class IO(datagrid):
                     shape = (slc.y.size, slc.x.size)
                 del slc, prm
         else:
-            
             #offsets = {'bottoms': bottoms, 'lefts': lefts, 'rights': rights, 'bottom': minh, 'extent': [maxy, maxx], 'ylims': ylims, 'xlims': xlims}
             offsets = self.prm_offsets(debug=debug)
+            #print ('offsets', offsets)
             maxy, maxx = offsets['extent']
             minh = offsets['bottom']
     
@@ -327,26 +328,35 @@ class IO(datagrid):
             for date in dates:
                 slcs = []
                 prms = []
-                
-                for subswath, bottom, left, right, ylim, xlim in zip(subswaths, 
+
+                # for single subswath accumulate offset in scene coordinates
+                offsetx = 0
+                for sw, bottom, left, right, ylim, xlim in zip(subswaths, 
                         offsets['bottoms'], offsets['lefts'], offsets['rights'], offsets['ylims'], offsets['xlims']):
                     #print (date, subswath)
-                    prm = self.PRM(date, subswath=int(subswath))
+                    if subswath is not None and not str(subswath) == sw:
+                        offsetx += right - left
+                        continue
+                    prm = self.PRM(date, subswath=int(sw))
                     # disable scaling
                     slc = prm.read_SLC_int(scale=scale, shape=(ylim, xlim))
-                    slc = slc.isel(x=slice(left, right)).assign_coords(y=slc.y + bottom)
+                    slc = slc.isel(x=slice(left if subswath is None else None, right if subswath is None else None))\
+                             .assign_coords(y=slc.y + bottom)
+                    if subswath is not None:
+                        slc = slc.assign_coords(x=slc.x + offsetx - left)
                     slcs.append(slc)
                     prms.append(prm)
-        
-                # check and merge SLCs, use zero fill for np.int16 datatype
-                slc = xr.concat(slcs, dim='x', fill_value=0).assign_coords(x=0.5 + np.arange(maxx))
 
-                if debug:
-                    print ('assert slc.y.size == maxy', slc.y.size, maxy)
-                assert slc.y.size == maxy, 'Incorrect output grid azimuth dimension size'
-                if debug:
-                    print ('assert slc.x.size == maxx', slc.x.size, maxx)
-                assert slc.x.size == maxx, 'Incorrect output grid range dimension sizes'
+                if subswath is None:
+                    # check and merge SLCs, use zero fill for np.int16 datatype
+                    slc = xr.concat(slcs, dim='x', fill_value=0).assign_coords(x=0.5 + np.arange(maxx))
+    
+                    if debug:
+                        print ('assert slc.y.size == maxy', slc.y.size, maxy)
+                    assert slc.y.size == maxy, 'Incorrect output grid azimuth dimension size'
+                    if debug:
+                        print ('assert slc.x.size == maxx', slc.x.size, maxx)
+                    assert slc.x.size == maxx, 'Incorrect output grid range dimension sizes'
                 del slcs
     
                 stack.append(slc.assign_coords(date=date))
@@ -355,6 +365,7 @@ class IO(datagrid):
         # DEM extent in radar coordinates, merged reference PRM required
         #print ('minx, miny, maxx, maxy', minx, miny, maxx, maxy)
         extent_ra = np.round(self.get_extent_ra().bounds).astype(int)
+        #print ('extent_ra', extent_ra)
         # minx, miny, maxx, maxy = extent_ra
         ds = xr.concat(stack, dim='date').assign(date=pd.to_datetime(dates))\
             .sel(y=slice(extent_ra[1], extent_ra[3]), x=slice(extent_ra[0], extent_ra[2])) \

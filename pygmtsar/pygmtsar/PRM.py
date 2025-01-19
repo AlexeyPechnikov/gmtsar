@@ -865,22 +865,23 @@ class PRM(datagrid, PRM_gmtsar):
         
         # pad to the specified reference frame
         if shape is not None:
-            if shape[1] > xdim:
+            if shape[1] is not None and shape[1] > xdim:
                 rpad = da.zeros((ydim, shape[1] - xdim), dtype=np.int16)
                 re = da.concatenate([re, rpad], axis=1)
                 im = da.concatenate([im, rpad], axis=1)
-            elif shape[1] < xdim:
+            elif shape[1] is not None and shape[1] < xdim:
                 re = re[:,:shape[1]]
                 im = im[:,:shape[1]]
-            if shape[0] > ydim:
-                apad = da.zeros((shape[0] - ydim, shape[1]), dtype=np.int16)
+            if shape[0] is not None and shape[0] > ydim:
+                apad = da.zeros((shape[0] - ydim, shape[1] if shape[1] is not None else xdim), dtype=np.int16)
                 re = da.concatenate([re, apad], axis=0)
                 im = da.concatenate([im, apad], axis=0)
-            elif shape[0] < ydim:
+            elif shape[0] is not None and shape[0] < ydim:
                 re = re[:shape[0]]
                 im = im[:shape[0]]
 
-        coords = {'y': np.arange(ydim if shape is None else shape[0]) + 0.5, 'x': np.arange(xdim if shape is None else shape[1]) + 0.5}
+        coords = {'y': np.arange(ydim if shape is None or shape[0] is None else shape[0]) + 0.5,
+                  'x': np.arange(xdim if shape is None or shape[1] is None else shape[1]) + 0.5}
 
         #coords = {'y': np.arange(ydim) + 0.5, 'x': np.arange(xdim) + 0.5}
         # perform aligning on-the-fly using coordinates
