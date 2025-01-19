@@ -14,8 +14,9 @@ from .utils import utils
 
 class Stack_phasediff(Stack_topo):
 
-    def compute_interferogram(self, pairs, name, resolution=None, weight=None, topo=None, phase=None, method=None,
-                              wavelength=None, psize=None, coarsen=None, stack=None, queue=None, timeout=None,
+    def compute_interferogram(self, pairs, name, subswath=None, weight=None, topo=None, phase=None, method=None,
+                              resolution=None, wavelength=None, psize=None, coarsen=None,
+                              stack=None, queue=None, timeout=None,
                               skip_exist=False, joblib_backend=None, debug=False):
         import xarray as xr
         import numpy as np
@@ -64,7 +65,7 @@ class Stack_phasediff(Stack_topo):
             #print (f'Interferogram pairs: {len(pairs)}')
             chunk, dates = self.get_pairs(chunk, dates=True)
             # load Sentinel-1 data
-            data = self.open_data(dates, debug=debug)
+            data = self.open_data(dates, subswath=subswath, debug=debug)
             if weight is not None:
                 data = data.reindex_like(weight, fill_value=np.nan)
             intensity = np.square(np.abs(data))
@@ -124,22 +125,24 @@ class Stack_phasediff(Stack_topo):
 
     # single-look interferogram processing has a limited set of arguments
     # resolution and coarsen are not applicable here
-    def compute_interferogram_singlelook(self, pairs, name, weight=None, topo='auto', phase=None,
+    def compute_interferogram_singlelook(self, pairs, name, subswath=None, weight=None, topo='auto', phase=None,
                                          wavelength=None, method='nearest', psize=None,
                                          stack=None, queue=16, timeout=None,
                                          skip_exist=False, joblib_backend=None, debug=False):
-        self.compute_interferogram(pairs, name, weight=weight, topo=topo, phase=phase, method=method, wavelength=wavelength,
-                                   psize=psize, stack=stack, queue=queue, timeout=timeout,
+        self.compute_interferogram(pairs, name, subswath=subswath, weight=weight, topo=topo, phase=phase, method=method,
+                                   wavelength=wavelength, psize=psize,
+                                   stack=stack, queue=queue, timeout=timeout,
                                    skip_exist=skip_exist, joblib_backend=joblib_backend, debug=debug)
 
     # Goldstein filter requires square grid cells means 1:4 range multilooking.
     # For multilooking interferogram we can use square grid always using coarsen = (1,4)
-    def compute_interferogram_multilook(self, pairs, name, resolution=None, weight=None, topo='auto', phase=None,
-                                        wavelength=None, method='nearest', psize=None, coarsen=(1,4),
+    def compute_interferogram_multilook(self, pairs, name, subswath=None, weight=None, topo='auto', phase=None,
+                                        resolution=None, wavelength=None, method='nearest', psize=None, coarsen=(1,4),
                                         stack=None, queue=16, timeout=None,
                                         skip_exist=False, joblib_backend=None, debug=False):
-        self.compute_interferogram(pairs, name, resolution=resolution, weight=weight, topo=topo, phase=phase, method=method,
-                                   wavelength=wavelength, psize=psize, coarsen=coarsen, stack=stack, queue=queue, timeout=timeout,
+        self.compute_interferogram(pairs, name, subswath=subswath, weight=weight, topo=topo, phase=phase, method=method,
+                                   resolution=resolution,  wavelength=wavelength, psize=psize, coarsen=coarsen,
+                                   stack=stack, queue=queue, timeout=timeout,
                                    skip_exist=skip_exist, joblib_backend=joblib_backend, debug=debug)
 
     @staticmethod
@@ -484,7 +487,8 @@ class Stack_phasediff(Stack_topo):
             phase_topo = topo
         else:
             # use zero topography grid
-            notopo = xr.DataArray(da.zeros_like(data[0], dtype=np.float32), coords=data[0].coords)
+            coords = {key: value for key, value in data[0].coords.items() if key != 'date'}
+            notopo = xr.DataArray(da.zeros_like(data[0], dtype=np.float32), coords=coords)
             phase_topo = self.topo_phase(pairs, notopo, method=method)
             del notopo
 
