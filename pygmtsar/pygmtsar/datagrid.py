@@ -494,6 +494,21 @@ class datagrid:
 
         return coarsens
 
+    @staticmethod
+    def calculate_coarsen_start(da, name, spacing, grid_factor=1):
+        """
+        Calculate start coordinate to align coarsened grids.
+        """
+        import numpy as np
+        for i in range(spacing):
+            values = da[name].isel({name: slice(i, None)}).coarsen({name: spacing}, boundary='trim').mean().values
+            delta = np.floor(values[0] % (spacing*grid_factor))
+            #print ('i', i, 'delta', delta, 'values', values[:5])
+            if delta == 0:
+                #print ('calculate_start', name, i)
+                return i
+        return None
+
 #     #decimator = lambda da: da.coarsen({'y': 2, 'x': 2}, boundary='trim').mean()
 #     def decimator(self, resolution=60, grid=(1, 4), func='mean', debug=False):
 #         """

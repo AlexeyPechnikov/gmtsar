@@ -85,11 +85,17 @@ class Stack_multilooking(Stack_phasediff):
             yname = [varname for varname in ['y', 'lat', 'a'] if varname in da.dims][0]
             xname = [varname for varname in ['x', 'lon', 'r'] if varname in da.dims][0]
             coarsen_args = {yname: yscale, xname: xscale0*xscale}
+            # calculate coordinate offsets to align coarsened grids
+            y0 = self.calculate_coarsen_start(da, yname, yscale,         grid[0])
+            x0 = self.calculate_coarsen_start(da, xname, xscale0*xscale, grid[1])
             # avoid creating the large chunks
             with dask.config.set(**{'array.slicing.split_large_chunks': True}):
                 #if func not in ['mean', 'min', 'max', 'count', 'sum']:
                 #    raise ValueError(f"Unsupported function {func}. Should be 'mean','min','max','count', or 'sum'")
-                return getattr(da.coarsen(coarsen_args, boundary='trim'), func)()\
+                # return getattr(da.coarsen(coarsen_args, boundary='trim'), func)()\
+                #        .chunk({yname: self.chunksize, xname: self.chunksize})
+                return getattr(da.isel({yname: slice(y0, None), xname: slice(x0, None)})\
+                       .coarsen(coarsen_args, boundary='trim'), func)()\
                        .chunk({yname: self.chunksize, xname: self.chunksize})
 
         # return callback function and set common chunk size
@@ -313,7 +319,14 @@ class Stack_multilooking(Stack_phasediff):
     
         # Set chunk size
         chunksizes = {'y': self.chunksize, 'x': self.chunksize}
+
         if coarsen:
-            return ds.coarsen({'y': coarsen[0], 'x': coarsen[1]}, boundary='trim').mean().chunk(chunksizes)
-    
+            # calculate coordinate offsets to align coarsened grids
+            y0 = self.calculate_coarsen_start(ds, 'y', coarsen[0])
+            x0 = self.calculate_coarsen_start(ds, 'x', coarsen[1])
+            return ds.isel({'y': slice(y0, None), 'x': slice(x0, None)})\
+                     .coarsen({'y': coarsen[0], 'x': coarsen[1]}, boundary='trim')\
+                     .mean()\
+                     .chunk(chunksizes)
+
         return ds.chunk(chunksizes)
