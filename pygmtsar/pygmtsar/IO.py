@@ -304,10 +304,14 @@ class IO(datagrid):
             subswaths = ''.join(map(str, subswaths))
         #print ('subswaths', subswaths)
 
+        #offsets = {'bottoms': bottoms, 'lefts': lefts, 'rights': rights, 'bottom': minh, 'extent': [maxy, maxx], 'ylims': ylims, 'xlims': xlims}
+        offsets = self.prm_offsets(debug=debug)
+        #print ('offsets', offsets)
+
         if len(subswaths) == 1:
             # stack single subswath
             stack = []
-            shape = None
+            shape = offsets['extent']
             for date in dates:
                 prm = self.PRM(date, subswath=int(subswaths))
                 # disable scaling
@@ -317,9 +321,6 @@ class IO(datagrid):
                     shape = (slc.y.size, slc.x.size)
                 del slc, prm
         else:
-            #offsets = {'bottoms': bottoms, 'lefts': lefts, 'rights': rights, 'bottom': minh, 'extent': [maxy, maxx], 'ylims': ylims, 'xlims': xlims}
-            offsets = self.prm_offsets(debug=debug)
-            #print ('offsets', offsets)
             maxy, maxx = offsets['extent']
             minh = offsets['bottom']
     
@@ -358,7 +359,7 @@ class IO(datagrid):
                         print ('assert slc.x.size == maxx', slc.x.size, maxx)
                     assert slc.x.size == maxx, 'Incorrect output grid range dimension sizes'
                 del slcs
-    
+
                 stack.append(slc.assign_coords(date=date))
                 del slc
 
