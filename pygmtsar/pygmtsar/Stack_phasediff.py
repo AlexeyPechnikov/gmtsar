@@ -15,7 +15,7 @@ from .utils import utils
 class Stack_phasediff(Stack_topo):
 
     def compute_interferogram(self, pairs, name, subswath=None, weight=None, topo=None, phase=None, method=None,
-                              resolution=None, wavelength=None, psize=None, coarsen=None,
+                              resolution=None, wavelength=None, psize=None, coarsen=None, real=None,
                               stack=None, queue=None, timeout=None,
                               skip_exist=False, joblib_backend=None, debug=False):
         import xarray as xr
@@ -85,22 +85,27 @@ class Stack_phasediff(Stack_topo):
             if psize is not None:
                 # Goldstein filter in psize pixel patch size on square grid cells produced using 1:4 range multilooking
                 phasediff_look_goldstein = self.goldstein(phasediff_look, corr_look, psize, debug=debug)
-                # convert complex phase difference to interferogram 
-                intf_look = self.interferogram(phasediff_look_goldstein, debug=debug)
+                del phasediff_look
+                # convert complex phase difference to interferogram
+                #intf_look = self.interferogram(phasediff_look_goldstein, debug=debug)
+                phasediff_look = phasediff_look_goldstein
                 del phasediff_look_goldstein
-            else:
-                # here is no additional filtering step
-                # convert complex phase difference to interferogram 
-                intf_look = self.interferogram(phasediff_look, debug=debug)
-            del phasediff_look
 
             # filter out not valid pixels
             if weight is not None:
                 weight_look = self.multilooking(weight, wavelength=None, coarsen=coarsen, debug=debug)
-                intf_look = intf_look.where(np.isfinite(weight_look))
+                phasediff_look = phasediff_look.where(np.isfinite(weight_look))
                 corr_look = corr_look.where(np.isfinite(weight_look))
                 del weight_look
-
+                
+            if real:
+                # convert complex phase difference to interferogram
+                intf_look = self.interferogram(phasediff_look, debug=debug)
+            else:
+                # output complex phase
+                intf_look = phasediff_look
+            del phasediff_look
+    
             # compute together because correlation depends on phase, and filtered phase depends on correlation.
             #tqdm_dask(result := dask.persist(decimator(corr15m), decimator(intf15m)), desc='Compute Phase and Correlation')
             # unpack results for a single interferogram
@@ -126,22 +131,22 @@ class Stack_phasediff(Stack_topo):
     # single-look interferogram processing has a limited set of arguments
     # resolution and coarsen are not applicable here
     def compute_interferogram_singlelook(self, pairs, name, subswath=None, weight=None, topo='auto', phase=None,
-                                         wavelength=None, method='nearest', psize=None,
+                                         wavelength=None, method='nearest', psize=None, real=True,
                                          stack=None, queue=16, timeout=None,
                                          skip_exist=False, joblib_backend=None, debug=False):
         self.compute_interferogram(pairs, name, subswath=subswath, weight=weight, topo=topo, phase=phase, method=method,
-                                   wavelength=wavelength, psize=psize,
+                                   wavelength=wavelength, psize=psize, real=real,
                                    stack=stack, queue=queue, timeout=timeout,
                                    skip_exist=skip_exist, joblib_backend=joblib_backend, debug=debug)
 
     # Goldstein filter requires square grid cells means 1:4 range multilooking.
     # For multilooking interferogram we can use square grid always using coarsen = (1,4)
     def compute_interferogram_multilook(self, pairs, name, subswath=None, weight=None, topo='auto', phase=None,
-                                        resolution=None, wavelength=None, method='nearest', psize=None, coarsen=(1,4),
+                                        resolution=None, wavelength=None, method='nearest', psize=None, coarsen=(1,4), real=True,
                                         stack=None, queue=16, timeout=None,
                                         skip_exist=False, joblib_backend=None, debug=False):
         self.compute_interferogram(pairs, name, subswath=subswath, weight=weight, topo=topo, phase=phase, method=method,
-                                   resolution=resolution,  wavelength=wavelength, psize=psize, coarsen=coarsen,
+                                   resolution=resolution,  wavelength=wavelength, psize=psize, coarsen=coarsen, real=real,
                                    stack=stack, queue=queue, timeout=timeout,
                                    skip_exist=skip_exist, joblib_backend=joblib_backend, debug=debug)
 
@@ -152,7 +157,9 @@ class Stack_phasediff(Stack_topo):
         if debug:
             print ('DEBUG: interferogram')
 
-        return np.arctan2(phase.imag, phase.real).rename('phase')
+        if np.issubdtype(phase.dtype, np.complexfloating):
+            return np.arctan2(phase.imag, phase.real).rename('phase')
+        return phase
 
 #     @staticmethod
 #     def correlation(I1, I2, amp):
