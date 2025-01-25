@@ -55,6 +55,7 @@ setup(
                       'joblib',
                       'tqdm',
                       'scipy',
+                      'xgboost',
                       'cffi',
                       'shapely>=2.0.2',
                       'scikit-learn',
