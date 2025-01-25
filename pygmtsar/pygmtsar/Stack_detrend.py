@@ -167,10 +167,10 @@ class Stack_detrend(Stack_unwrap):
         import numpy as np
         import xarray as xr
         import dask
-        # 'linear'
         from sklearn.linear_model import LinearRegression
-        # 'sgd'
         from sklearn.linear_model import SGDRegressor
+        from xgboost import XGBRegressor
+        from sklearn.svm import SVR
         from sklearn.pipeline import make_pipeline
         from sklearn.preprocessing import StandardScaler
     
@@ -209,25 +209,32 @@ class Stack_detrend(Stack_unwrap):
                 del data_values, variables_values, weight_values, nanmask
                 return np.nan * np.zeros(data.shape)
 
-            # Prepare target Y for regression
+            # prepare target Y for regression
             if wrap:
-                # Convert angles to sine and cosine as (N,2) -> (sin, cos) matrix
+                # convert angles to sine and cosine as (N,2) -> (sin, cos) matrix
                 Y = np.column_stack([np.sin(data_values), np.cos(data_values)]).astype(np.float64)
             else:
-                # Just use data values as (N,1) matrix
-                Y = data_values.reshape(-1, 1).astype(np.float64)
+                # just use data values as (N) matrix
+                Y = data_values.reshape(-1).astype(np.float64)
             del data_values
 
             # build prediction model with or without plane removal (fit_intercept)
             algorithm = kwargs.pop('algorithm', 'linear')
-            if algorithm == 'sgd':
-                regr = make_pipeline(StandardScaler(), SGDRegressor(**kwargs))
-                fit_params = {'sgdregressor__sample_weight': weight_values[~nanmask]} if weight.size > 1 else {}
-            elif algorithm == 'linear':
+            if algorithm == 'linear':
                 regr = make_pipeline(StandardScaler(), LinearRegression(**kwargs, copy_X=False, n_jobs=1))
-                fit_params = {'linearregression__sample_weight': weight_values[~nanmask]} if weight.size > 1 else {}
+                fit_params = {'linearregression__sample_weight': weight_values[~nanmask]} if weight_values is not None else {}
+            elif algorithm == 'sgd':
+                regr = make_pipeline(StandardScaler(), SGDRegressor(**kwargs))
+                fit_params = {'sgdregressor__sample_weight': weight_values[~nanmask]} if weight_values is not None else {}
+            elif algorithm == 'xgb':
+                regr = make_pipeline(StandardScaler(), XGBRegressor(**kwargs))
+                fit_params = {'xgbregressor__sample_weight': weight_values[~nanmask]} if weight_values is not None else {}
+            elif algorithm == 'svm':
+                kernel = kwargs.pop('kernel', 'rbf')
+                regr = make_pipeline(StandardScaler(), SVR(kernel=kernel, **kwargs))
+                fit_params = {'svr__sample_weight': weight_values[~nanmask]} if weight_values is not None else {}
             else:
-                raise ValueError(f"Unsupported algorithm {kwargs['algorithm']}. Should be 'linear' or 'sgd'")
+                raise ValueError(f"Unsupported algorithm {algorithm}. Should be 'linear', 'sgd', 'xgb', or 'svm'.")
             del weight_values
 
             regr.fit(variables_values[:, ~nanmask].T, Y[~nanmask], **fit_params)
@@ -339,6 +346,88 @@ class Stack_detrend(Stack_unwrap):
         """
         return self.regression(data, variables, weight, valid_pixels_threshold, algorithm='sgd',
                                max_iter=max_iter, tol=tol, alpha=alpha, l1_ratio=l1_ratio)
+
+    def regression_xgboost(self, data, variables, weight=None, valid_pixels_threshold=1000,
+                           n_estimators=100, learning_rate=0.1, max_depth=6, **kwargs):
+        """
+        Perform regression on a dataset using XGBoost (XGBRegressor).
+
+        Parameters:
+        -----------
+        data : xarray.DataArray
+            The target data array to fit.
+        variables : list[xarray.DataArray] or xarray.DataArray
+            Predictor variables.
+        weight : xarray.DataArray, optional
+            Sample weights per data point. Defaults to None.
+        valid_pixels_threshold : int, optional
+            Minimum valid pixels required for the regression to run. Defaults to 1000.
+        n_estimators : int, optional
+            Number of boosting rounds. Defaults to 100.
+        learning_rate : float, optional
+            Step size shrinkage used in update to prevents overfitting. Defaults to 0.1.
+        max_depth : int, optional
+            Maximum depth of a tree. Defaults to 6.
+        kwargs :
+            Additional keyword arguments passed to XGBRegressor.
+
+        Returns:
+        --------
+        xarray.DataArray
+            The predicted values as an xarray DataArray, fitted by XGBRegressor.
+        """
+        return self.regression(
+            data,
+            variables,
+            weight=weight,
+            valid_pixels_threshold=valid_pixels_threshold,
+            algorithm='xgb',
+            n_estimators=n_estimators,
+            learning_rate=learning_rate,
+            max_depth=max_depth,
+            **kwargs
+        )
+
+    def regression_svm(self, data, variables, weight=None, valid_pixels_threshold=1000,
+                       kernel='rbf', C=1.0, gamma='scale', **kwargs):
+        """
+        Perform regression on a dataset using Support Vector Regression (SVR) with an RBF kernel.
+
+        Parameters:
+        -----------
+        data : xarray.DataArray
+            The target data array to fit.
+        variables : list[xarray.DataArray] or xarray.DataArray
+            Predictor variables.
+        weight : xarray.DataArray, optional
+            Sample weights per data point. Defaults to None.
+        valid_pixels_threshold : int, optional
+            Minimum valid pixels required for the regression to run. Defaults to 1000.
+        kernel : str, optional
+            Kernel type. Defaults to 'rbf'.
+        C : float, optional
+            Regularization parameter. Defaults to 1.0.
+        gamma : str or float, optional
+            Kernel coefficient. Defaults to 'scale'.
+        kwargs :
+            Additional keyword arguments passed to SVR.
+
+        Returns:
+        --------
+        xarray.DataArray
+            The predicted values as an xarray DataArray, fitted by SVR.
+        """
+        return self.regression(
+            data,
+            variables,
+            weight=weight,
+            valid_pixels_threshold=valid_pixels_threshold,
+            algorithm='svm',
+            kernel=kernel,
+            C=C,
+            gamma=gamma,
+            **kwargs
+        )
 
     def polyfit(self, data, weight=None, degree=0, days=None, count=None, wrap=False):
         print ('NOTE: Function is deprecated. Use Stack.regression_pairs() instead.')
