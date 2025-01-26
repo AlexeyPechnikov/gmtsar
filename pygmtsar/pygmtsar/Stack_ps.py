@@ -47,14 +47,20 @@ class Stack_ps(Stack_stl):
                 data = data.where(geometry).where(np.isfinite(geometry))
 
         # normalize image amplitudes (intensities)
-        tqdm_dask(mean := dask.persist(data.mean(dim=['y','x'])), desc='Intensity Normalization')
         # dask.persist returns tuple
-        norm = mean[0].mean(dim='date') / mean[0]
+        tqdm_dask(mean := dask.persist(data.mean(dim=['y','x']))[0], desc='Intensity Normalization')
+        # workaround: apply compute() to calculated mean to prevent weird dask 2025.1.0 error:
+        # Exception: 'AttributeError("\'tuple\' object has no attribute \'size\'")'
+        mean = mean.compute()
+        data_norm = data * (mean.mean(dim='date') / mean)
+        del data
         # compute average and std.dev.
-        stats = (norm * data).pipe(lambda x: (x.mean(dim='date'), x.std(dim='date')))
-        del data, norm
-        ds = xr.merge([stats[0].rename('average'), stats[1].rename('deviation'), mean[0].rename('stack_average')])
-        del stats, mean
+        ds = xr.merge([
+            data_norm.mean(dim='date').rename('average'),
+            data_norm.std(dim='date').rename('deviation'),
+            mean.rename('stack_average')
+        ])
+        del mean, data_norm
         if interactive:
             return ds
         self.save_cube(ds, name, 'Compute Stability Measures')
