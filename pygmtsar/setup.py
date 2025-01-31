@@ -72,9 +72,7 @@ setup(
                       'imageio',
                       'matplotlib',
                       'adjustText',
-                      'seaborn',
-                      'vtk',
-                      'panel'
+                      'seaborn'
                       ],
 #    extras_require={
 #                      'vtk_support': ['vtk', 'panel']

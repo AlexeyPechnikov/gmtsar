@@ -26,7 +26,7 @@ fi
 
 # Install virtual framebuffer for interactive 3D visualization
 apt install -y xvfb > /dev/null
-pip3 install -q pyvista xvfbwrapper jupyter_bokeh
+pip3 install -q pyvista xvfbwrapper jupyter_bokeh vtk panel
 # jupyter_bokeh for panel interactive visualization backend blocks tqdm progressbar
 # to prevent the issue wrap a Panel component in an IPywidget
 # https://panel.holoviz.org/how_to/notebook/notebook.html
