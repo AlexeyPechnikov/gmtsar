@@ -59,7 +59,7 @@ jobs:
             > pico_do_fogo_volcano_eruption_2014.fixed.py
         python3 pico_do_fogo_volcano_eruption_2014.fixed.py
     - name: Archive test results
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: Plots (${{ matrix.os }}, ${{ matrix.python-version }})
         path: tests/*.jpg
