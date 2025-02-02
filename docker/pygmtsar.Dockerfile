@@ -9,13 +9,19 @@ FROM quay.io/jupyter/scipy-notebook:ubuntu-24.04
 
 USER root
 
+# grant passwordless sudo rights
+RUN echo "${NB_USER} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
 # install command-line tools
 RUN apt-get -y update && apt-get -y upgrade && apt-get -y install \
     git subversion curl jq csh zip htop mc netcdf-bin \
 &&  apt-get clean \
 &&  rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# install GMTSAR dependencies
+##########################################################################################
+# Install GMTSAR
+##########################################################################################
+# install dependencies
 RUN apt-get -y update && apt-get -y install \
     autoconf make gfortran \
     gdal-bin libgdal-dev \
@@ -44,19 +50,18 @@ RUN cd $(dirname ${GMTSAR}) \
 &&  make clean
 
 # system cleanup
-RUN apt-get -y remove \
+RUN apt-get -y remove --purge \
     libgdal-dev autoconf make gfortran \
     libtiff5-dev libhdf5-dev liblapack-dev libgmt-dev \
-&&  apt-get autoremove -y --purge \
-&&  apt-get clean \
-&&  rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+&&  apt-get autoremove -y --purge
 
-# install dependencies to compile vtk, h5py, rasterio
+##########################################################################################
+# Install VTK
+##########################################################################################
+# install dependencies
 RUN apt-get -y update && apt-get -y install \
-    xvfb \
-    libhdf5-dev pkg-config \
-    libgdal-dev \
-    mesa-utils libopengl0 libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
+    libopengl0 mesa-utils \
+    libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
     cmake ninja-build python3-dev build-essential \
 &&  apt-get clean \
 &&  rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
@@ -81,35 +86,47 @@ RUN git clone https://gitlab.kitware.com/vtk/vtk.git \
 &&  cd ../.. \
 &&  rm -fr vtk
 
+# system cleanup
+RUN apt-get -y remove --purge \
+    libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
+    cmake ninja-build python3-dev build-essential \
+&&  apt-get autoremove -y --purge
+
+##########################################################################################
+# Install PyGMTSAR
+##########################################################################################
+# install dependencies to build rasterio
+RUN apt-get -y update && apt-get -y install \
+    libgdal-dev build-essential \
+&&  apt-get clean \
+&&  rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
 # install PyGMTSAR and visualization libraries
-# use requirements.sh to build the installation command
-RUN pip3 install --no-cache-dir \
-    asf_search==7.0.4 \
-    h5netcdf==1.3.0 \
-    h5py==3.10.0 \
-    ipywidgets==8.1.1 \
-    ipyleaflet==0.19.1 \
-    remotezip==0.12.2 \
+RUN /opt/conda/bin/pip3 install --no-cache-dir \
+    ipywidgets \
+    ipyleaflet \
     xvfbwrapper \
     jupyter_bokeh \
     jupyter-leaflet \
     panel \
     trame trame-vtk trame-client trame-server
-RUN pip3 install --no-cache-dir git+https://github.com/mobigroup/gmtsar.git@pygmtsar2#subdirectory=pygmtsar
+RUN /opt/conda/bin/pip3 install --no-cache-dir git+https://github.com/mobigroup/gmtsar.git@pygmtsar2#subdirectory=pygmtsar
 
-# magic fix for h5py library
-RUN pip3 uninstall -y h5py && pip3 install --no-cache-dir h5py
-# install pyvista without vtk dependency
-RUN pip3 install --no-cache-dir matplotlib pillow pooch scooby typing-extensions \
-&&  pip3 install --no-cache-dir --no-deps pyvista
+# install recent pyvista with invalid dependencies specification
+RUN /opt/conda/bin/pip3 install --no-cache-dir matplotlib pillow pooch scooby typing-extensions \
+&&  /opt/conda/bin/pip3 install --no-cache-dir --no-deps pyvista
 
-# system cleanup after vtk and h5py libraries installation
-RUN apt-get -y remove \
-    libhdf5-dev pkg-config \
-    libgdal-dev \
-    libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
-    cmake ninja-build python3-dev build-essential \
-&&  apt-get autoremove -y --purge \
+# system cleanup
+RUN apt-get -y remove --purge \
+    libgdal-dev build-essential \
+&&  apt-get autoremove -y --purge
+
+##########################################################################################
+# Install Virtual Frame Buffer for PyVista
+##########################################################################################
+# install dependencies to compile
+RUN apt-get -y update && apt-get -y install \
+    xvfb \
 &&  apt-get clean \
 &&  rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
@@ -120,8 +137,9 @@ import xvfbwrapper\n\
 display = xvfbwrapper.Xvfb(width=1280, height=1024)\n\
 display.start()' /usr/local/bin/start-notebook.py
 
-# grant passwordless sudo rights
-RUN echo "${NB_USER} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+##########################################################################################
+# Install PyGMTSAR examples
+##########################################################################################
 
 # switch user
 USER    ${NB_UID}
