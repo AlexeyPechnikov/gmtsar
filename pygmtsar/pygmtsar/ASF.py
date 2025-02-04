@@ -649,3 +649,70 @@ class ASF(tqdm_joblib):
         bursts_downloaded = pd.DataFrame(bursts_missed, columns=['burst'])
         # return the results in a user-friendly dataframe
         return bursts_downloaded
+
+    @staticmethod
+    def search(geometry, startTime=None, stopTime=None, flightDirection=None,
+               platform='SENTINEL-1', processingLevel='auto', polarization='VV', beamMode='IW'):
+        import geopandas as gpd
+        import asf_search
+        import shapely
+
+        # cover defined time interval
+        if len(startTime)==10:
+            startTime=f'{startTime} 00:00:01'
+        if len(stopTime)==10:
+            stopTime=f'{stopTime} 23:59:59'
+
+        if flightDirection == 'D':
+            flightDirection = 'DESCENDING'
+        elif flightDirection == 'A':
+            flightDirection = 'ASCENDING'
+
+        # convert to a single geometry
+        if isinstance(geometry, (gpd.GeoDataFrame, gpd.GeoSeries)):
+            geometry = geometry.geometry.union_all()
+        # convert closed linestring to polygon
+        if geometry.type == 'LineString' and geometry.coords[0] == geometry.coords[-1]:
+            geometry = shapely.geometry.Polygon(geometry.coords)
+        if geometry.type == 'Polygon':
+            # force counterclockwise orientation.
+            geometry = shapely.geometry.polygon.orient(geometry, sign=1.0)
+        #print ('wkt', geometry.wkt)
+
+        if isinstance(processingLevel, str) and processingLevel=='auto' and platform == 'SENTINEL-1':
+            processingLevel = asf_search.PRODUCT_TYPE.BURST
+
+        # search bursts
+        results = asf_search.search(
+            start=startTime,
+            end=stopTime,
+            flightDirection=flightDirection,
+            intersectsWith=geometry.wkt,
+            platform=platform,
+            processingLevel=processingLevel,
+            polarization=polarization,
+            beamMode=beamMode,
+        )
+        return gpd.GeoDataFrame.from_features([product.geojson() for product in results], crs="EPSG:4326")
+
+    @staticmethod
+    def plot(bursts):
+        import pandas as pd
+        import matplotlib
+        import matplotlib.pyplot as plt
+
+        bursts['date'] = pd.to_datetime(bursts['startTime']).dt.strftime('%Y-%m-%d')
+        bursts['label'] = bursts.apply(lambda rec: f"{rec['flightDirection'].replace('E','')[:3]} {rec['date']} [{rec['pathNumber']}]", axis=1)
+        unique_labels = sorted(bursts['label'].unique())
+        unique_paths = sorted(bursts['pathNumber'].astype(str).unique())
+        colors = {label[-4:-1]: 'orange' if label[0] == 'A' else 'cyan' for i, label in enumerate(unique_labels)}
+        fig, ax = plt.subplots(figsize=(10, 8))
+        for label, group in bursts.groupby('label'):
+            group.plot(ax=ax, edgecolor=colors[label[-4:-1]], facecolor='none', linewidth=1, alpha=1, label=label)
+        burst_handles = [matplotlib.lines.Line2D([0], [0], color=colors[label[-4:-1]], lw=1, label=label) for label in unique_labels]
+        aoi_handle = matplotlib.lines.Line2D([0], [0], color='red', lw=1, label='AOI')
+        handles = burst_handles + [aoi_handle]
+        ax.legend(handles=handles, loc='upper right')
+        ax.set_title('Sentinel-1 Burst Footprints')
+        ax.set_xlabel('Longitude')
+        ax.set_ylabel('Latitude')
