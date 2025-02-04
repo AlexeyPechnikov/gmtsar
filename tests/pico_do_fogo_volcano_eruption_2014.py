@@ -101,16 +101,14 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.width', None)
 pd.set_option('display.max_colwidth', 100)
 
-from pygmtsar import S1, Stack, tqdm_dask, ASF, Tiles
+from pygmtsar import S1, Stack, tqdm_dask, ASF, Tiles, XYZTiles
 
 """## Define Processing Parameters"""
 
-SCENES = ['S1A_IW_SLC__1SSV_20141108T073035_20141108T073049_003187_003ABB_1E14',
-          'S1A_IW_SLC__1SSV_20141202T073035_20141202T073048_003537_0042A3_79F1']
-SUBSWATH = 1
+ORBIT    = 'D'
 
-WORKDIR      = 'raw_fogo'
-DATADIR      = 'data_fogo'
+WORKDIR      = f'raw_fogo_{ORBIT}'
+DATADIR      = f'data_fogo_{ORBIT}'
 
 # define DEM and landmask filenames inside data directory
 DEM = f'{DATADIR}/dem.nc'
@@ -120,8 +118,19 @@ geojson = '''
 {
   "type": "Feature",
   "geometry": {
-    "type": "LineString",
-    "coordinates": [[-24.42, 14.8],[-24.3, 14.8],[-24.28, 14.9],[-24.3, 15.06],[-24.4, 15.06],[-24.5,15],[-24.54,14.88],[-24.42, 14.8]]
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [-24.42, 14.8],
+        [-24.3, 14.8],
+        [-24.28, 14.9],
+        [-24.3, 15.06],
+        [-24.4, 15.06],
+        [-24.5, 15],
+        [-24.54, 14.88],
+        [-24.42, 14.8]
+      ]
+    ]
   },
   "properties": {}
 }
@@ -130,7 +139,28 @@ AOI = gpd.GeoDataFrame.from_features([json.loads(geojson)])
 
 """## Download and Unpack Datasets
 
-## Enter Your ASF User and Password
+### Sentinel-1 SLC Search
+"""
+
+# find bursts
+bursts = ASF.search(AOI, startTime='2014-11-08', stopTime='2014-12-02', flightDirection=ORBIT)
+bursts
+
+# print bursts
+BURSTS = bursts.fileID.tolist()
+print (f'Bursts defined: {len(BURSTS)}')
+BURSTS
+
+# plot bursts
+ASF.plot(bursts)
+# plot AOI
+AOI.plot(ax=plt.gca(), color='gold', edgecolor='darkgoldenrod', alpha=0.5, label='AOI')
+# plot basemap
+XYZTiles().download_googlesatellitehybrid(bursts.union_all().buffer(0.1), zoom=9).plot.imshow(ax=plt.gca())
+plt.gca().set_aspect('equal')
+plt.show()
+
+"""### Data Downloading
 
 If the data directory is empty or doesn't exist, you'll need to download Sentinel-1 scenes from the Alaska Satellite Facility (ASF) datastore. Use your Earthdata Login credentials. If you don't have an Earthdata Login, you can create one at https://urs.earthdata.nasa.gov//users/new
 
@@ -139,6 +169,7 @@ You can also use pre-existing SLC scenes stored on your Google Drive, or you can
 The credentials below are available at the time the notebook is validated.
 """
 
+# Enter Your ASF User and Password.
 # Set these variables to None and you will be prompted to enter your username and password below.
 asf_username = 'GoogleColab2023'
 asf_password = 'GoogleColab_2023'
@@ -146,7 +177,7 @@ asf_password = 'GoogleColab_2023'
 # Set these variables to None and you will be prompted to enter your username and password below.
 asf = ASF(asf_username, asf_password)
 # Optimized scene downloading from ASF - only the required subswaths and polarizations.
-print(asf.download(DATADIR, SCENES, SUBSWATH))
+print(asf.download(DATADIR, BURSTS))
 
 # scan the data directory for SLC scenes and download missed orbits
 S1.download_orbits(DATADIR, S1.scan_slc(DATADIR))
@@ -177,7 +208,7 @@ Search recursively for measurement (.tiff) and annotation (.xml) and orbit (.EOF
 Use filters to find required subswath, polarization and orbit in original scenes .SAFE directories in the data directory.
 """
 
-scenes = S1.scan_slc(DATADIR, subswath=SUBSWATH)
+scenes = S1.scan_slc(DATADIR)
 
 sbas = Stack(WORKDIR, drop_if_exists=True).set_scenes(scenes)
 sbas.to_dataframe()
@@ -282,23 +313,18 @@ panel.panel(
     enable_keybindings=False, sizing_mode='stretch_width', min_height=600
 )
 
-"""## Unwrapping
-
-Unwrapping process requires a lot of RAM and that's really RAM consuming when a lot of parallel proccesses running togeter. To limit the parallel processing tasks apply argument "n_jobs". The default value n_jobs=-1 means all the processor cores van be used. Also, use interferogram decimation above to produce smaller interferograms. And in addition a custom SNAPHU configuration can reduce RAM usage as explained below.
-
-Attention: in case of crash on MacOS Apple Silicon run Jupyter as
-
-`OBJC_DISABLE_INITIALIZE_FORK_SAFETY=YES no_proxy='*' jupyter notebook`
-"""
+"""## Unwrapping"""
 
 # mask low-coherence areas using threshold value 0.075
 tqdm_dask(unwrap := sbas.unwrap_snaphu(intf.where(corr>=0.075), corr).persist(),
           desc='SNAPHU Unwrapping')
+# apply simplest detrending
+unwrap['phase'] = unwrap.phase - unwrap.phase.mean()
 
 # geocode to geographic coordinates and crop empty borders
 unwrap_ll = sbas.ra2ll(unwrap.phase)
 
-sbas.plot_phase(unwrap_ll.where(landmask_ll), caption='Unwrapped Phase\nGeographic Coordinates, [rad]', quantile=[0.02, 0.99], aspect='equal')
+sbas.plot_phase(unwrap_ll.where(landmask_ll), caption='Unwrapped Phase\nGeographic Coordinates, [rad]', quantile=[0.02, 0.98], aspect='equal')
 plt.savefig('Unwrapped Phase Geographic Coordinates, [rad].jpg')
 
 sbas.export_vtk(unwrap_ll.where(landmask_ll), 'unwrap', mask='auto')
@@ -337,7 +363,21 @@ panel.panel(
     enable_keybindings=False, sizing_mode='stretch_width', min_height=600
 )
 
-"""## Conclusion
+"""## Compare Results
 
-For now you have the full control on interferometry processing and unwrapping and able to run it everywhere: on free of charge Google Colab instances, on local MacOS and Linux computers and on Amazon EC2 and Google Cloud VM and AI Notebook instances.
+The 2014–2015 eruption of Fogo volcano: Geodetic modeling of Sentinel-1 TOPS interferometry
+
+Geophysical Research Letters
+
+DOI: 10.1002/2015GL066003
+
+https://agupubs.onlinelibrary.wiley.com/doi/full/10.1002/2015gl066003
+
+Notably, downloading the image is denied (HTTP 403 error).
+
+<img src='https://agupubs.onlinelibrary.wiley.com/cms/asset/f736272e-065b-4846-9c61-45ef42dc0d14/grl53607-fig-0002-m.png' width='50%'>
 """
+
+# compare to the top-right image in the 2x2 plot above
+sbas.plot_interferogram(intf_ll.where(landmask_ll), caption=f'PyGMTSAR Interferogram, [rad]\nS1A Desc {pairs[0][0]} - {pairs[0][1]}', aspect='equal')
+plt.savefig('PyGMTSAR Interferogram, [rad].jpg')

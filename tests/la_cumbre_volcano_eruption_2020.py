@@ -101,44 +101,14 @@ pd.set_option('display.max_columns', None)
 pd.set_option('display.width', None)
 pd.set_option('display.max_colwidth', 100)
 
-from pygmtsar import S1, Stack, tqdm_dask, ASF, Tiles
+from pygmtsar import S1, Stack, tqdm_dask, ASF, Tiles, XYZTiles
 
-"""## Define Sentinel-1 SLC Scenes and Processing Parameters
+"""## Define Processing Parameters"""
 
-When you need more scenes and SBAS analysis  see examples on PyGMTSAR GitHub page https://github.com/mobigroup/gmtsar
-
-### Ascending Orbit Configuration
-
-SCENES = ['S1B_IW_SLC__1SDV_20200109T002539_20200109T002609_019732_0254EE_EBD2',
-          'S1B_IW_SLC__1SDV_20200121T002539_20200121T002609_019907_025A83_D599']
-SUBSWATH = 2
-
-### Descending Orbit Configuration
-"""
-
-# The subswath is required for partial scene downloads and is not used for burst downloads.
-# The orbit is used to define directory names.
 ORBIT    = 'D'
-SUBSWATH = 12
 
-# SCENES = ['S1B_IW_SLC__1SDV_20200110T114920_20200110T114950_019754_02559E_5E5F',
-#           'S1A_IW_SLC__1SDV_20200116T115016_20200116T115044_030825_03895F_D200']
-
-BURSTS = """
-S1_273867_IW2_20200116T115028_VV_D200-BURST
-S1_273867_IW1_20200116T115027_VV_D200-BURST
-S1_273866_IW2_20200116T115025_VV_D200-BURST
-S1_273866_IW1_20200116T115024_VV_D200-BURST
-S1_273867_IW2_20200110T114946_VV_5E5F-BURST
-S1_273867_IW1_20200110T114945_VV_5E5F-BURST
-S1_273866_IW2_20200110T114943_VV_5E5F-BURST
-S1_273866_IW1_20200110T114942_VV_5E5F-BURST
-"""
-BURSTS = list(filter(None, BURSTS.split('\n')))
-print (f'Bursts defined: {len(BURSTS)}')
-
-WORKDIR      = 'raw_lacumbre_desc'  if ORBIT == 'D' else 'raw_lacumbre_asc'
-DATADIR      = 'data_lacumbre_desc' if ORBIT == 'D' else 'data_lacumbre_asc'
+WORKDIR      = f'raw_lacumbre_{ORBIT}'
+DATADIR      = f'data_lacumbre_{ORBIT}'
 
 # define DEM and landmask filenames inside data directory
 DEM = f'{DATADIR}/dem.nc'
@@ -148,9 +118,15 @@ geojson = '''
 {
   "type": "Feature",
   "geometry": {
-    "type": "LineString",
-    "coordinates": [[-91.43, -0.5], [-91.38, -0.36], [-91.46, -0.26],
-                    [-91.66, -0.3], [-91.65, -0.4], [-91.61, -0.48], [-91.43, -0.5]]
+    "type": "Polygon",
+    "coordinates": [[
+      [-91.43, -0.5],
+      [-91.38, -0.36],
+      [-91.46, -0.26],
+      [-91.66, -0.3],
+      [-91.65, -0.4],
+      [-91.43, -0.5]
+    ]]
   },
   "properties": {}
 }
@@ -159,7 +135,28 @@ AOI = gpd.GeoDataFrame.from_features([json.loads(geojson)])
 
 """## Download and Unpack Datasets
 
-## Enter Your ASF User and Password
+### Sentinel-1 SLC Search
+"""
+
+# find bursts
+bursts = ASF.search(AOI.buffer(-0.02), startTime='2020-01-10', stopTime='2020-01-16', flightDirection=ORBIT)
+bursts
+
+# print bursts
+BURSTS = bursts.fileID.tolist()
+print (f'Bursts defined: {len(BURSTS)}')
+BURSTS
+
+# plot bursts
+ASF.plot(bursts)
+# plot AOI
+AOI.plot(ax=plt.gca(), color='gold', edgecolor='darkgoldenrod', alpha=0.5, label='AOI')
+# plot basemap
+XYZTiles().download_googlesatellitehybrid(bursts.union_all().buffer(0.1), zoom=9).plot.imshow(ax=plt.gca())
+plt.gca().set_aspect('equal')
+plt.show()
+
+"""### Data Downloading
 
 If the data directory is empty or doesn't exist, you'll need to download Sentinel-1 scenes from the Alaska Satellite Facility (ASF) datastore. Use your Earthdata Login credentials. If you don't have an Earthdata Login, you can create one at https://urs.earthdata.nasa.gov//users/new
 
@@ -168,15 +165,13 @@ You can also use pre-existing SLC scenes stored on your Google Drive, or you can
 The credentials below are available at the time the notebook is validated.
 """
 
+# Enter Your ASF User and Password.
 # Set these variables to None and you will be prompted to enter your username and password below.
 asf_username = 'GoogleColab2023'
 asf_password = 'GoogleColab_2023'
 
 # Set these variables to None and you will be prompted to enter your username and password below.
 asf = ASF(asf_username, asf_password)
-# Optimized scene downloading from ASF - only the required subswaths and polarizations.
-# Subswaths are already encoded in burst identifiers and are only needed for scenes.
-#print(asf.download(DATADIR, SCENES, SUBSWATH))
 print(asf.download(DATADIR, BURSTS))
 
 # scan the data directory for SLC scenes and download missed orbits
@@ -208,7 +203,7 @@ Search recursively for measurement (.tiff) and annotation (.xml) and orbit (.EOF
 Use filters to find required subswath, polarization and orbit in original scenes .SAFE directories in the data directory.
 """
 
-scenes = S1.scan_slc(DATADIR, subswath=SUBSWATH)
+scenes = S1.scan_slc(DATADIR)
 
 sbas = Stack(WORKDIR, drop_if_exists=True).set_scenes(scenes)
 sbas.to_dataframe()
@@ -313,7 +308,9 @@ sbas.export_vtk(intf_crop[::2,::2], 'intf', mask='auto')
 
 # build interactive 3D plot
 plotter = pv.Plotter(notebook=True)
-plotter.add_mesh(pv.read('intf.vtk').scale([1, 1, 0.00002], inplace=True), scalars='phase', cmap='turbo', ambient=0.1, show_scalar_bar=True)
+axes = pv.Axes(show_actor=True, actor_scale=2.0, line_width=5)
+mesh = pv.read('intf.vtk').scale([1, 1, 0.00002], inplace=True).rotate_z(135, point=axes.origin)
+plotter.add_mesh(mesh, scalars='phase', cmap='turbo', ambient=0.1, show_scalar_bar=True)
 plotter.show_axes()
 plotter.show(screenshot='3D Interferogram.png', jupyter_backend='panel', return_viewer=True)
 plotter.add_title(f'Interactive Interferogram on DEM', font_size=32)
@@ -322,6 +319,95 @@ panel.panel(
     plotter.render_window, orientation_widget=plotter.renderer.axes_enabled,
     enable_keybindings=False, sizing_mode='stretch_width', min_height=600
 )
+
+"""## Unwrapping"""
+
+tqdm_dask(unwrap := sbas.unwrap_snaphu(intf.where(corr), corr).persist(),
+          desc='SNAPHU Unwrapping')
+
+sbas.plot_phase(unwrap.phase.where(landmask), quantile=[0.02, 0.99], aspect='equal')
+plt.savefig('Unwrap.jpg')
+
+# crop a small land patch at top right corner
+from shapely.geometry import Polygon
+AOI_buffer = AOI.buffer(0.05).exterior.apply(lambda ring: Polygon(ring))
+unwrap_crop = sbas.as_geo(unwrap.phase.where(landmask)).rio.clip(AOI_buffer)
+
+sbas.export_vtk(unwrap_crop[::2,::2], 'unwrap', mask='auto')
+
+# build interactive 3D plot
+plotter = pv.Plotter(notebook=True)
+axes = pv.Axes(show_actor=True, actor_scale=2.0, line_width=5)
+mesh = pv.read('unwrap.vtk').scale([1, 1, 0.00002], inplace=True).rotate_z(135, point=axes.origin)
+plotter.add_mesh(mesh, scalars='phase', cmap='turbo', ambient=0.1, show_scalar_bar=True)
+plotter.show_axes()
+plotter.show(screenshot='3D Unwrapped Interferogram.png', jupyter_backend='panel', return_viewer=True)
+plotter.add_title(f'Interactive Unwrapped Interferogram on DEM', font_size=32)
+plotter._on_first_render_request()
+panel.panel(
+    plotter.render_window, orientation_widget=plotter.renderer.axes_enabled,
+    enable_keybindings=False, sizing_mode='stretch_width', min_height=600
+)
+
+"""## LOS Displacement"""
+
+los_disp = sbas.los_displacement_mm(unwrap.phase)
+# apply simplest detrending
+los_disp = los_disp-los_disp.mean()
+
+sbas.plot_displacement(los_disp.where(landmask), caption='LOS Displacement, [mm]', quantile=[0.02, 0.98], aspect='equal')
+plt.savefig('los.jpg')
+
+# crop a small land patch at top right corner
+from shapely.geometry import Polygon
+AOI_buffer = AOI.buffer(0.05).exterior.apply(lambda ring: Polygon(ring))
+los_disp_crop = sbas.as_geo(los_disp.where(landmask)).rio.clip(AOI_buffer)
+
+sbas.export_vtk(los_disp_crop[::2,::2], 'los', mask='auto')
+
+# build interactive 3D plot
+plotter = pv.Plotter(notebook=True)
+axes = pv.Axes(show_actor=True, actor_scale=2.0, line_width=5)
+mesh = pv.read('los.vtk').scale([1, 1, 0.00002], inplace=True).rotate_z(135, point=axes.origin)
+plotter.add_mesh(mesh, scalars='los', cmap='turbo', ambient=0.1, show_scalar_bar=True)
+plotter.show_axes()
+plotter.show(screenshot='3D LOS Displacement.png', jupyter_backend='panel', return_viewer=True)
+plotter.add_title(f'Interactive LOS Displacement on DEM', font_size=32)
+plotter._on_first_render_request()
+panel.panel(
+    plotter.render_window, orientation_widget=plotter.renderer.axes_enabled,
+    enable_keybindings=False, sizing_mode='stretch_width', min_height=600
+)
+
+"""## Compare Results to Instituto Geofísico, Escuela Politécnica Nacional (IG-EPN)
+
+Most Recent Bulletin Report: March 2020 (BGVN 45:03)
+https://volcano.si.edu/volcano.cfm?vn=353010
+
+<img src='https://volcano.si.edu/images/bulletin/353010/353010_BGVN_043.jpg' width='50%'>
+
+### Download LOS displacement map
+"""
+
+# sometimes the server does not respond
+url = "https://volcano.si.edu/images/bulletin/353010/353010_BGVN_043.jpg"
+!wget -qc {url}
+
+# check if the file is downloaded
+if os.path.exists('353010_BGVN_043.jpg'):
+    f, (ax1, ax2) = plt.subplots(1,2,figsize=(12,4), dpi=300)
+    # plot basemap
+    XYZTiles().download_openstreetmap(los_disp_crop, zoom=10).plot.imshow(ax=ax1)
+    los_disp_crop.plot.imshow(vmin=-350, vmax=218, alpha=0.2, cmap='jet', ax=ax1)
+    ax1.set_title('PyGMTSAR LOS Displacement, [mm]', fontsize=18)
+
+    from skimage import io
+    img = io.imread('353010_BGVN_043.jpg')[220:-220,240:-240]
+    ax2.imshow(img)
+    ax2.axis('off')
+    ax2.set_title('IG-EPN LOS Displacement, [cm]', fontsize=18)
+
+    plt.show()
 
 """## Export VTK file from Google Colab"""
 
