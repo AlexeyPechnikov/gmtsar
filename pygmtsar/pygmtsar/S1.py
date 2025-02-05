@@ -34,7 +34,8 @@ class S1(tqdm_joblib):
     """
     @staticmethod
     def download_orbits(basedir: str, scenes: list | pd.DataFrame,
-                        n_jobs: int = 8, joblib_backend='loky', skip_exist: bool = True):
+                        n_jobs: int = 8, joblib_backend='loky', skip_exist: bool = True,
+                        retries: int = 30, timeout_second: float = 3):
         """
         Downloads orbit files corresponding to the specified Sentinel-1 scenes.
     
@@ -67,6 +68,7 @@ class S1(tqdm_joblib):
         import re
         import glob
         from datetime import datetime
+        import time
         import joblib
         import zipfile
         from io import BytesIO
@@ -155,14 +157,27 @@ class S1(tqdm_joblib):
                         # check XML validity
                         xmltodict.parse(orbit_content)
                         f.write(orbit_content)
-    
+
+        def download_with_retry(func, retries, timeout_second, *args, **kwargs):
+            for retry in range(retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    print(f'ERROR: download attempt {retry+1} failed: {e}')
+                    if retry + 1 >= retries:
+                        raise
+                time.sleep(timeout_second)
+
         # download orbits index files and detect the orbits.
         # joblib reads the class file from disk,
         # and to allow modification of orbit_offset_* on the fly, add them to the arguments
         with S1.tqdm_joblib(tqdm(desc='Downloading Sentinel-1 Orbits Index:', total=len(df))) as progress_bar:
-            orbits = joblib.Parallel(n_jobs=n_jobs, backend=joblib_backend)(joblib.delayed(download_index)\
-                                    (scene.mission, scene.datetime,
-                                    S1.orbit_offset_start, S1.orbit_offset_end) for scene in df.itertuples())
+            orbits = joblib.Parallel(n_jobs=n_jobs, backend=joblib_backend)(joblib.delayed(download_with_retry)\
+                                    (download_index, retries, timeout_second,
+                                    mission=scene.mission,
+                                    dt=scene.datetime,
+                                    orbit_offset_start=S1.orbit_offset_start,
+                                    orbit_offset_end=S1.orbit_offset_end) for scene in df.itertuples())
         # convert to dataframe for processing
         orbits = pd.DataFrame(orbits, columns=['orbit', 'url'])
         # exclude duplicates if needed 
@@ -170,8 +185,10 @@ class S1(tqdm_joblib):
         
         # download orbits index files and detect the orbits
         with S1.tqdm_joblib(tqdm(desc='Downloading Sentinel-1 Orbits:', total=len(orbits))) as progress_bar:
-            joblib.Parallel(n_jobs=n_jobs, backend=joblib_backend)(joblib.delayed(download_orbit)\
-                                    (basedir, orbit.url + orbit.orbit) for orbit in orbits.itertuples())
+            joblib.Parallel(n_jobs=n_jobs, backend=joblib_backend)(joblib.delayed(download_with_retry)\
+                                    (download_orbit, retries, timeout_second,
+                                    basedir=basedir,
+                                    url=orbit.url + orbit.orbit) for orbit in orbits.itertuples())
         return orbits['orbit']
 
     @staticmethod
