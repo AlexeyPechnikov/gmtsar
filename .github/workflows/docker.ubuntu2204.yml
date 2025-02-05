@@ -25,8 +25,8 @@ jobs:
 
       - name: Build and Push Docker Image
         run: |
-          ls -R .
-          docker buildx build . -f /home/runner/work/pygmtsar/pygmtsar/docker/pygmtsar.ubuntu2204.Dockerfile \
+          ls -R docker
+          docker buildx build . -f docker/pygmtsar.ubuntu2204.Dockerfile \
             --platform linux/amd64,linux/arm64 \
             --tag pechnikov/pygmtsar:$(date "+%Y-%m-%d") \
             --tag pechnikov/pygmtsar:latest \
