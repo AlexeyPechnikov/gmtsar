@@ -24,9 +24,8 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build and Push Docker Image
-        working-directory: docker
         run: |
-          docker buildx build . -f pygmtsar.ubuntu2204.Dockerfile \
+          docker buildx build . -f pygmtsar/docker/pygmtsar.ubuntu2204.Dockerfile \
             --platform linux/amd64,linux/arm64 \
             --tag pechnikov/pygmtsar:$(date "+%Y-%m-%d") \
             --tag pechnikov/pygmtsar:latest \
