@@ -44,7 +44,7 @@ RUN cd $(dirname ${GMTSAR}) \
 &&  git checkout e98ebc0f4164939a4780b1534bac186924d7c998 \
 &&  autoconf \
 &&  ./configure --with-orbits-dir=${ORBITS} CFLAGS='-z muldefs' LDFLAGS='-z muldefs' \
-&&  make \
+&&  make -j$(nproc) \
 &&  make install \
 &&  make clean
 
@@ -66,9 +66,8 @@ RUN apt-get -y update && apt-get -y install \
 &&  rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # install python vtk library
-RUN git clone https://gitlab.kitware.com/vtk/vtk.git \
+RUN git clone --depth=1 --branch v9.3.1 https://gitlab.kitware.com/vtk/vtk.git \
 &&  cd vtk \
-&&  git checkout v9.3.1 \
 &&  mkdir build && cd build \
 &&  cmake ../ \
   -GNinja \
@@ -102,8 +101,6 @@ RUN apt-get -y update && apt-get -y install \
 &&  rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # install PyGMTSAR and visualization libraries
-#ENV CONDA_EXPERIMENTAL_SOLVER=classic
-#ENV CONDA_NO_PLUGINS=true
 RUN /opt/conda/bin/pip3 install --no-cache-dir \
     xvfbwrapper \
     ipywidgets \
