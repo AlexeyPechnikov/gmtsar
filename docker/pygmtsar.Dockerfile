@@ -1,11 +1,10 @@
 # https://jupyter-docker-stacks.readthedocs.io/en/latest/using/selecting.html
-# https://github.com/jupyter/docker-stacks/blob/main/base-notebook/Dockerfile
-# https://hub.docker.com/repository/docker/mobigroup/pygmtsar
 # host platform compilation:
 # docker build . -f pygmtsar.Dockerfile -t mobigroup/pygmtsar:latest --no-cache
 # cross-compilation:
 # docker buildx build . -f pygmtsar.Dockerfile -t mobigroup/pygmtsar:latest --no-cache --platform linux/amd64 --load
-FROM quay.io/jupyter/scipy-notebook:ubuntu-24.04
+#FROM quay.io/jupyter/scipy-notebook:ubuntu-24.04
+FROM quay.io/jupyter/scipy-notebook:2025-01-28
 
 USER root
 
@@ -97,27 +96,28 @@ RUN apt-get -y remove --purge \
 ##########################################################################################
 # install dependencies to build rasterio
 RUN apt-get -y update && apt-get -y install \
+    libhdf5-dev pkg-config \
     libgdal-dev build-essential \
 &&  apt-get clean \
 &&  rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # install PyGMTSAR and visualization libraries
+#ENV CONDA_EXPERIMENTAL_SOLVER=classic
+#ENV CONDA_NO_PLUGINS=true
 RUN /opt/conda/bin/pip3 install --no-cache-dir \
-    ipywidgets \
-    ipyleaflet \
     xvfbwrapper \
+    ipywidgets \
     jupyter_bokeh \
-    jupyter-leaflet \
     panel \
-    trame trame-vtk trame-client trame-server
+    ipyleaflet
 RUN /opt/conda/bin/pip3 install --no-cache-dir git+https://github.com/mobigroup/gmtsar.git@pygmtsar2#subdirectory=pygmtsar
-
 # install recent pyvista with invalid dependencies specification
 RUN /opt/conda/bin/pip3 install --no-cache-dir matplotlib pillow pooch scooby typing-extensions \
 &&  /opt/conda/bin/pip3 install --no-cache-dir --no-deps pyvista
 
 # system cleanup
 RUN apt-get -y remove --purge \
+    libhdf5-dev pkg-config \
     libgdal-dev build-essential \
 &&  apt-get autoremove -y --purge
 
@@ -140,7 +140,6 @@ display.start()' /usr/local/bin/start-notebook.py
 ##########################################################################################
 # Install PyGMTSAR examples
 ##########################################################################################
-
 # switch user
 USER    ${NB_UID}
 WORKDIR "${HOME}"
