@@ -1,9 +1,26 @@
 # https://jupyter-docker-stacks.readthedocs.io/en/latest/using/selecting.html
 # host platform compilation:
-# docker build . -f pygmtsar.Dockerfile -t mobigroup/pygmtsar:latest --no-cache
+# docker build . -f pygmtsar.Dockerfile -t pechnikov/pygmtsar:latest --no-cache
 # cross-compilation:
-# docker buildx build . -f pygmtsar.Dockerfile -t mobigroup/pygmtsar:latest --no-cache --platform linux/amd64 --load
-#FROM quay.io/jupyter/scipy-notebook:ubuntu-24.04
+# docker buildx build . -f pygmtsar.Dockerfile -t pechnikov/pygmtsar:latest-amd64 --no-cache --platform linux/amd64 --load
+# multiple hosts compilation:
+# amd64 image:
+# docker buildx build . -f docker/pygmtsar.Dockerfile \
+#       --platform linux/amd64 \
+#       --tag pechnikov/pygmtsar:$(date "+%Y-%m-%d")-amd64 \
+#       --tag pechnikov/pygmtsar:latest-amd64 \
+#       --pull --push --no-cache
+# arm64 image:
+# docker buildx build . -f docker/pygmtsar.Dockerfile \
+#     --platform linux/arm64 \
+#     --tag pechnikov/pygmtsar:$(date "+%Y-%m-%d")-arm64 \
+#     --tag pechnikov/pygmtsar:latest-arm64 \
+#     --pull --push --no-cache
+# create a multi-arch manifest:
+# docker buildx imagetools create \
+#     --tag pechnikov/pygmtsar:latest \
+#     pechnikov/pygmtsar:latest-amd64 \
+#     pechnikov/pygmtsar:latest-arm64
 FROM quay.io/jupyter/scipy-notebook:2025-01-28
 
 USER root
@@ -107,7 +124,7 @@ RUN /opt/conda/bin/pip3 install --no-cache-dir \
     jupyter_bokeh \
     panel \
     ipyleaflet
-RUN /opt/conda/bin/pip3 install --no-cache-dir git+https://github.com/mobigroup/gmtsar.git@pygmtsar2#subdirectory=pygmtsar
+RUN /opt/conda/bin/pip3 install --no-cache-dir git+https://github.com/AlexeyPechnikov/gmtsar.git@pygmtsar2#subdirectory=pygmtsar
 # install recent pyvista with invalid dependencies specification
 RUN /opt/conda/bin/pip3 install --no-cache-dir matplotlib pillow pooch scooby typing-extensions \
 &&  /opt/conda/bin/pip3 install --no-cache-dir --no-deps pyvista
@@ -141,9 +158,7 @@ display.start()' /usr/local/bin/start-notebook.py
 USER    ${NB_UID}
 WORKDIR "${HOME}"
 
-# Clone only the pygmtsar2 branch
-RUN git config --global http.postBuffer 524288000 \
-&& git clone --depth=1 --branch pygmtsar2 --single-branch https://github.com/AlexeyPechnikov/pygmtsar.git \
-&& mv pygmtsar/notebooks ./notebooks \
-&& mv pygmtsar/README.md ./ \
-&& rm -rf pygmtsar work
+# download Google Colab notebooks
+RUN wget https://raw.githubusercontent.com/AlexeyPechnikov/pygmtsar/refs/heads/pygmtsar2/notebooks/dload.sh \
+&&  sh dload.sh \
+&&  rm -rf dload.sh work
