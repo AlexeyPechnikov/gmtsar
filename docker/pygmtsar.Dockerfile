@@ -23,6 +23,9 @@
 #     pechnikov/pygmtsar:latest-arm64
 FROM quay.io/jupyter/scipy-notebook:2025-01-28
 
+##########################################################################################
+# Start initialization
+##########################################################################################
 USER root
 
 # grant passwordless sudo rights
@@ -108,7 +111,7 @@ RUN apt-get -y remove --purge \
 &&  apt-get autoremove -y --purge
 
 ##########################################################################################
-# Install PyGMTSAR
+# Install Python Libraries
 ##########################################################################################
 # install dependencies to build rasterio
 RUN apt-get -y update && apt-get -y install \
@@ -118,13 +121,15 @@ RUN apt-get -y update && apt-get -y install \
 &&  rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # install PyGMTSAR and visualization libraries
+# install rasterio PyGMTSAR dependency because it requires compilation on ARM64
 RUN /opt/conda/bin/pip3 install --no-cache-dir \
     xvfbwrapper \
     ipywidgets \
     jupyter_bokeh \
     panel \
-    ipyleaflet
-RUN /opt/conda/bin/pip3 install --no-cache-dir git+https://github.com/AlexeyPechnikov/gmtsar.git@pygmtsar2#subdirectory=pygmtsar
+    ipyleaflet \
+    rasterio
+
 # install recent pyvista with invalid dependencies specification
 RUN /opt/conda/bin/pip3 install --no-cache-dir matplotlib pillow pooch scooby typing-extensions \
 &&  /opt/conda/bin/pip3 install --no-cache-dir --no-deps pyvista
@@ -152,13 +157,28 @@ display = xvfbwrapper.Xvfb(width=1280, height=1024)\n\
 display.start()' /usr/local/bin/start-notebook.py
 
 ##########################################################################################
-# Install PyGMTSAR examples
+# Add PyGMTSAR examples
+##########################################################################################
+# download Google Colab notebooks from Google Drive
+RUN wget -q https://raw.githubusercontent.com/AlexeyPechnikov/pygmtsar/refs/heads/pygmtsar2/notebooks/dload.sh \
+    && chmod +x dload.sh \
+    && ./dload.sh colab_notebooks \
+    && rm -f dload.sh \
+    && mv colab_notebooks ${HOME}/notebooks \
+    && chown -R ${NB_UID}:${NB_GID} ${HOME}/notebooks
+
+##########################################################################################
+# Install PyGMTSAR
+##########################################################################################
+ADD "https://api.github.com/repos/AlexeyPechnikov/pygmtsar/commits?per_page=1" latest_commit
+RUN /opt/conda/bin/pip3 install --no-cache-dir git+https://github.com/AlexeyPechnikov/gmtsar.git@pygmtsar2#subdirectory=pygmtsar \
+&&  rm -f latest_commit
+
+##########################################################################################
+# End initialization
 ##########################################################################################
 # switch user
 USER    ${NB_UID}
 WORKDIR "${HOME}"
 
-# download Google Colab notebooks
-RUN wget https://raw.githubusercontent.com/AlexeyPechnikov/pygmtsar/refs/heads/pygmtsar2/notebooks/dload.sh \
-&&  sh dload.sh notebooks \
-&&  rm -rf dload.sh work
+RUN rm -rf work
