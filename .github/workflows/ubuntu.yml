@@ -57,7 +57,13 @@ jobs:
         make install
     - name: Install PyGMTSAR
       run: |
-        # vtk rendering
+        # rasterio build required on ARM64 only
+        if [ "$(uname -m)" = "aarch64" ]; then
+          echo "Installing ARM64-specific dependencies..."
+          sudo apt install -y libhdf5-dev pkg-config libgdal-dev
+        else
+          echo "Skipping ARM64-specific dependencies..."
+        fi
         pip3 install pyvista panel ipyleaflet
         pip3 install -e ./pygmtsar/
     - name: Run test

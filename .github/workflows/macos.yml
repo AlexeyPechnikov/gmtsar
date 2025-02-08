@@ -46,7 +46,7 @@ jobs:
         make install
     - name: Install PyGMTSAR
       run: |
-        pip3 install pyvista panel
+        pip3 install pyvista panel ipyleaflet
         pip3 install -e ./pygmtsar/
     - name: Run test
       working-directory: tests
