@@ -1,0 +1,50 @@
+name: Docker Build (Ubuntu amd64/arm64)
+
+#on:
+#  workflow_dispatch:
+
+on:
+  push:
+    branches: [ "pygmtsar2" ]
+  pull_request:
+    branches: [ "pygmtsar2" ]
+
+jobs:
+  build:
+  
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm64]
+
+    #runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
+    runs-on: ${{ fromJSON('{"amd64":"ubuntu-24.04", "arm64":"ubuntu-24.04-arm"}')[matrix.arch] }}
+
+    steps:
+      - name: Print runner details
+        run: uname -a
+
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Get Git commit SHA
+        run: echo "COMMIT_SHA=$(echo ${GITHUB_SHA} | cut -c1-7)" >> $GITHUB_ENV
+
+      - name: Build and Push Docker Image
+        run: |
+          test -d docker && ls -R docker || echo "Error: 'docker/' directory not found."
+          docker build . -f docker/pygmtsar.Dockerfile \
+            --tag pechnikov/pygmtsar:latest-dev-${{ matrix.arch }} \
+            --tag pechnikov/pygmtsar:${COMMIT_SHA}-dev-${{ matrix.arch }} \
+            --push \
+            --cache-from=type=registry,ref=pechnikov/pygmtsar:cache-${{ matrix.arch }} \
+            --cache-to=type=registry,ref=pechnikov/pygmtsar:cache-${{ matrix.arch }},mode=max
