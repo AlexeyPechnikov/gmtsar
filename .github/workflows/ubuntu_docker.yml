@@ -42,9 +42,9 @@ jobs:
       - name: Build and Push Docker Image
         run: |
           test -d docker && ls -R docker || echo "Error: 'docker/' directory not found."
-          docker build . -f docker/pygmtsar.Dockerfile \
+          docker buildx build . -f docker/pygmtsar.Dockerfile \
             --tag pechnikov/pygmtsar:latest-dev-${{ matrix.arch }} \
             --tag pechnikov/pygmtsar:${COMMIT_SHA}-dev-${{ matrix.arch }} \
             --push \
-            --cache-from=type=registry,ref=pechnikov/pygmtsar:cache-${{ matrix.arch }} \
-            --cache-to=type=registry,ref=pechnikov/pygmtsar:cache-${{ matrix.arch }},mode=max
+            --cache-from type=registry,ref=pechnikov/pygmtsar:cache-${{ matrix.arch }} \
+            --cache-to type=registry,ref=pechnikov/pygmtsar:cache-${{ matrix.arch }},mode=max
