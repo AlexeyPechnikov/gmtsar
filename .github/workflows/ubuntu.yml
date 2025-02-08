@@ -18,18 +18,19 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["ubuntu-latest"]
-        python-version: ["3.10", "3.11"]
+        os: ["ubuntu-latest", "ubuntu-24.04-arm"]
+        python-version: ["3.13"]
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v3
+    - name: Print runner details
+      run: uname -a
+    - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install system dependencies
       run: |
-        uname -a
         # prepare system
         sudo apt update
         # https://github.com/gmtsar/gmtsar/wiki/GMTSAR-Wiki-Page
@@ -62,17 +63,18 @@ jobs:
     - name: Run test
       working-directory: tests
       run: |
+        SCRIPT=imperial_valley_2015.py
         export PATH=$PATH:${{ github.workspace }}/GMTSAR/bin
         Xvfb :99 -screen 0 800x600x24 > /dev/null 2>&1 &
         export DISPLAY=:99
         export XVFB_PID=$!
         # remove Google Colab specific commands and add __main__ section
-        cat imperial_valley_2015.py \
+        cat "$SCRIPT" \
             | sed '/if \x27google\.colab\x27 in sys\.modules:/,/^$/d' \
             | sed 's/^[[:blank:]]*!.*$//' \
             | awk '/username = \x27GoogleColab2023\x27/ {print "if __name__ == \x27__main__\x27:"; indent=1} {if(indent) sub(/^/, "    "); print}' \
-            > imperial_valley_2015.fixed.py
-        python3 imperial_valley_2015.fixed.py
+            > "$SCRIPT.fixed.py"
+        python3 "$SCRIPT.fixed.py"
     - name: Archive test results
       uses: actions/upload-artifact@v4
       with:

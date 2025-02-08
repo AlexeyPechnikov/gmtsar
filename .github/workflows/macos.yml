@@ -13,18 +13,20 @@ permissions:
   contents: read
 
 jobs:
-  Pico_do_Fogo_2014:
+  Imperial_Valley_2015:
 
     strategy:
       fail-fast: false
       matrix:
         os: ["macos-13"]
-        python-version: ["3.11"]
+        python-version: ["3.13"]
     runs-on: ${{ matrix.os }}
     steps:
-    - uses: actions/checkout@v3
+    - name: Print runner details
+      run: uname -a
+    - uses: actions/checkout@v4
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install system dependencies
@@ -49,15 +51,16 @@ jobs:
     - name: Run test
       working-directory: tests
       run: |
+        SCRIPT=imperial_valley_2015.py
         export PATH=$PATH:${{ github.workspace }}/GMTSAR/bin
         ulimit -n 10000
         # remove Google Colab specific commands and add __main__ section
-        cat pico_do_fogo_volcano_eruption_2014.py \
+        cat "$SCRIPT" \
             | sed '/if \x27google\.colab\x27 in sys\.modules:/,/^$/d' \
             | sed 's/^[[:blank:]]*!.*$//' \
             | awk '/username = \x27GoogleColab2023\x27/ {print "if __name__ == \x27__main__\x27:"; indent=1} {if(indent) sub(/^/, "    "); print}' \
-            > pico_do_fogo_volcano_eruption_2014.fixed.py
-        python3 pico_do_fogo_volcano_eruption_2014.fixed.py
+            > "$SCRIPT.fixed.py"
+        python3 "$SCRIPT.fixed.py"
     - name: Archive test results
       uses: actions/upload-artifact@v4
       with:
