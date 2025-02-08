@@ -281,7 +281,7 @@ class PRM(datagrid, PRM_gmtsar):
         """
         import pandas as pd
 
-        df = pd.read_csv(prm, sep='\s+=\s+', header=None, names=['name', 'value'], engine='python').set_index('name')
+        df = pd.read_csv(prm, sep=r'\s+=\s+', header=None, names=['name', 'value'], engine='python').set_index('name')
         df['value'] = df['value'].map(PRM.to_numeric_or_original)
 
         return PRM(df)
