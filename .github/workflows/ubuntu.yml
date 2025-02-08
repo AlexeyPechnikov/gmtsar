@@ -61,7 +61,7 @@ jobs:
           # install dependencies
           apt-get -y update && apt-get -y install \
                 libopengl0 mesa-utils \
-                libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
+                libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libglvnd-dev \
                 cmake ninja-build python3-dev build-essential
           
           # install python vtk library
