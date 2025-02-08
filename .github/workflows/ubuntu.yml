@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["ubuntu-latest", "ubuntu-24.04-arm"]
+        os: ["ubuntu-24.04", "ubuntu-24.04-arm"]
         python-version: ["3.13"]
     runs-on: ${{ matrix.os }}
     steps:
@@ -55,9 +55,36 @@ jobs:
         ./configure --with-orbits-dir=/tmp CFLAGS='-z muldefs' LDFLAGS='-z muldefs'
         make CFLAGS='-z muldefs' LDFLAGS='-z muldefs'
         make install
+    - name: Compile VTK (ARM64 only)
+      run: |
+        if [ "$(uname -m)" = "aarch64" ]; then
+          # install dependencies
+          apt-get -y update && apt-get -y install \
+                libopengl0 mesa-utils \
+                libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
+                cmake ninja-build python3-dev build-essential
+          
+          # install python vtk library
+          git clone --depth=1 --branch v9.3.1 https://gitlab.kitware.com/vtk/vtk.git
+          cd vtk
+          mkdir build && cd build
+          cmake ../ \
+              -GNinja \
+              -DCMAKE_BUILD_TYPE=Release \
+              -DVTK_DEFAULT_RENDER_WINDOW_OFFSCREEN=ON \
+              -DVTK_OPENGL_HAS_EGL=ON \
+              -DVTK_OPENGL_HAS_OSMESA=OFF \
+              -DVTK_USE_X=OFF \
+              -DCMAKE_INSTALL_PREFIX=$(python3 -c "import sys; print(sys.prefix)") \
+              -DVTK_WRAP_PYTHON=ON \
+              -DVTK_PYTHON_VERSION=3
+          ninja -j$(nproc)
+          ninja install
+          cd ../..
+        fi
     - name: Install PyGMTSAR
       run: |
-        # rasterio build required on ARM64 only
+        # rasterio and VTK build required on ARM64 only
         if [ "$(uname -m)" = "aarch64" ]; then
           echo "Installing ARM64-specific dependencies..."
           sudo apt install -y libhdf5-dev pkg-config libgdal-dev
