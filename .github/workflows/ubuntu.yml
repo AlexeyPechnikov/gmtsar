@@ -61,7 +61,7 @@ jobs:
           # install dependencies
           apt-get -y update && apt-get -y install \
                 libopengl0 mesa-utils \
-                libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libglvnd-dev \
+                libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev libglvnd-dev xorg-dev libx11-dev \
                 cmake ninja-build python3-dev build-essential
           
           # install python vtk library
@@ -75,6 +75,7 @@ jobs:
               -DVTK_OPENGL_HAS_EGL=ON \
               -DVTK_OPENGL_HAS_OSMESA=OFF \
               -DVTK_USE_X=OFF \
+              -DOpenGL_GL_PREFERENCE=GLVND \
               -DCMAKE_INSTALL_PREFIX=$(python3 -c "import sys; print(sys.prefix)") \
               -DVTK_WRAP_PYTHON=ON \
               -DVTK_PYTHON_VERSION=3
