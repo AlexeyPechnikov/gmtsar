@@ -1,0 +1,23 @@
+name: Cleanup Docker Hub Cache
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'
+
+jobs:
+  delete-cache:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get Docker Hub JWT Token
+        run: |
+          TOKEN=$(curl -s -X POST "https://hub.docker.com/v2/users/login/" \
+            -H "Content-Type: application/json" \
+            -d '{"username": "'"${{ secrets.DOCKER_USERNAME }}"'", "password": "'"${{ secrets.DOCKER_PASSWORD }}"'"}' | jq -r .token)
+          echo "TOKEN=$TOKEN" >> $GITHUB_ENV
+
+      - name: Delete cache tags from Docker Hub
+        run: |
+          curl -X DELETE -H "Authorization: JWT $TOKEN" \
+            "https://hub.docker.com/v2/repositories/pechnikov/pygmtsar/tags/cache-arm64/"
+          curl -X DELETE -H "Authorization: JWT $TOKEN" \
+            "https://hub.docker.com/v2/repositories/pechnikov/pygmtsar/tags/cache-amd64/"
