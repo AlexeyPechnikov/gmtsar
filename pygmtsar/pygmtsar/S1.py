@@ -27,11 +27,6 @@ class S1(tqdm_joblib):
     orbit_offset_start = timedelta(seconds=3600)
     orbit_offset_end = timedelta(seconds=300)
 
-    """
-    find . -type f -name '*.tiff' -exec basename {} .tiff \; \
-        | awk -F'-' -v OFS='_' '{print toupper($1), "IW_SLC__1SDV", toupper($5), toupper($6), $7, toupper($8), $9"X.SAFE"}' \
-        | xargs -I {} mkdir -p {}
-    """
     @staticmethod
     def download_orbits(basedir: str, scenes: list | pd.DataFrame,
                         n_jobs: int = 8, joblib_backend='loky', skip_exist: bool = True,
