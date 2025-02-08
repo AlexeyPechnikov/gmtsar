@@ -1,6 +1,9 @@
 #!/bin/sh
 
 DIR="notebooks"
+if [ $# -gt 0 ]; then
+    DIR="$1"
+fi
 
 rm -fr README.md "$DIR"
 mkdir -p "$DIR"

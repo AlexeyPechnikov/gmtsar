@@ -160,5 +160,5 @@ WORKDIR "${HOME}"
 
 # download Google Colab notebooks
 RUN wget https://raw.githubusercontent.com/AlexeyPechnikov/pygmtsar/refs/heads/pygmtsar2/notebooks/dload.sh \
-&&  sh dload.sh \
+&&  sh dload.sh notebooks \
 &&  rm -rf dload.sh work
