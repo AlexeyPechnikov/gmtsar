@@ -351,6 +351,7 @@ class S1(tqdm_joblib):
             # look for as precise (from date-1 day to date+1 day) as restituted orbits (from date to date or date-1 to date)
             orbits = [orbits.get((date-oneday, date+oneday)) or
                       orbits.get((date-oneday, date)) or
+                      orbits.get((date, date+oneday+oneday)) or
                       orbits.get((date, date)) for date in ds]
             #print ('fileorbits', fileorbits)
             df['orbitpath'] = orbits
