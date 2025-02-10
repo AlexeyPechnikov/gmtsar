@@ -19,7 +19,7 @@ if [ "$count" -eq 0 ]; then
     #cd /usr/local/GMTSAR && git checkout e98ebc0f4164939a4780b1534bac186924d7c998 > /dev/null
     cd /usr/local/GMTSAR && autoconf > /dev/null
     cd /usr/local/GMTSAR && ./configure --with-orbits-dir=/tmp > /dev/null
-    cd /usr/local/GMTSAR && make -j$(nproc) 1>/dev/null 2>/dev/null
+    cd /usr/local/GMTSAR && make -j$((($(nproc) + 1) / 2)) 1>/dev/null 2>/dev/null
     cd /usr/local/GMTSAR && make install >/dev/null
     # test one GMTSAR binary
     /usr/local/GMTSAR/bin/make_s1a_tops 2>&1 | head -n 2
