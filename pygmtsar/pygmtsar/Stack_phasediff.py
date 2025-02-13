@@ -492,12 +492,15 @@ class Stack_phasediff(Stack_topo):
             del topo_grid
         elif (isinstance(topo, xr.DataArray) and topo.name=='phase'):
             phase_topo = topo
-        else:
+        elif topo is not None:
             # use zero topography grid
             coords = {key: value for key, value in data[0].coords.items() if key != 'date'}
             notopo = xr.DataArray(da.zeros_like(data[0], dtype=np.float32), coords=coords)
             phase_topo = self.topo_phase(pairs, notopo, method=method)
             del notopo
+        else:
+            # do not apply any correction
+            phase_topo = 1
 
         if phase is not None:
             phase_real = xr.concat([utils.interp2d_like(phase2d, data, method=method,
