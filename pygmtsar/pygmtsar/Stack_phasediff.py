@@ -718,7 +718,8 @@ class Stack_phasediff(Stack_topo):
             data = data.unstack('stack')
 
         plt.figure()
-        data.plot.imshow(vmin=-np.pi, vmax=np.pi, cmap=cmap)
+        self.wrap(self.interferogram(data) if np.issubdtype(data.dtype, np.complexfloating) else data)\
+            .plot.imshow(vmin=-np.pi, vmax=np.pi, cmap=cmap)
         self.plot_AOI(**kwargs)
         self.plot_POI(**kwargs)
         if aspect is not None:
@@ -734,7 +735,8 @@ class Stack_phasediff(Stack_topo):
             data = data.unstack('stack')
 
         # multi-plots ineffective for linked lazy data
-        fg = self.wrap(data).plot.imshow(
+        fg = self.wrap(self.interferogram(data) if np.issubdtype(data.dtype, np.complexfloating) else data)\
+            .plot.imshow(
             col='pair',
             col_wrap=cols, size=size, aspect=aspect,
             vmin=-np.pi, vmax=np.pi, cmap='gist_rainbow_r'
