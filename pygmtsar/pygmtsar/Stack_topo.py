@@ -64,7 +64,7 @@ class Stack_topo(Stack_trans_inv):
             plt.ylabel('Azimuth')
         plt.title(caption)
 
-    def topo_phase(self, pairs, topo='auto', grid=None, method='nearest', debug=False):
+    def topo_phase(self, dates, topo='auto', grid=None, method='nearest', debug=False):
         import pandas as pd
         import dask
         import dask.array as da
@@ -79,10 +79,6 @@ class Stack_topo(Stack_trans_inv):
 
         if debug:
             print ('DEBUG: topo_phase')
-
-        # convert pairs (list, array, dataframe) to 2D numpy array
-        pairs, dates = self.get_pairs(pairs, dates=True)
-        pairs = pairs[['ref', 'rep']].astype(str).values
 
         if isinstance(topo, str) and topo == 'auto':
             topo = self.get_topo()
@@ -117,6 +113,9 @@ class Stack_topo(Stack_trans_inv):
             #prm1 = prm1[0]
             #prm2 = prm2[0]
             
+            if prm1 is None or prm2 is None:
+                return np.ones_like(block_topo).astype(np.complex64)
+
             # get full dimensions
             xdim = prm1.get('num_rng_bins')
             ydim = prm1.get('num_patches') * prm1.get('num_valid_az')
@@ -196,15 +195,16 @@ class Stack_topo(Stack_trans_inv):
         # here is some delay on the function call but the actual processing is faster
         # define offset once to apply to all the PRMs
         offsets = self.prm_offsets(debug=debug)
-        def prepare_prms(pair, offsets):
-            date1, date2 = pair
-            prm1 = self.PRM_merged(date1, offsets=offsets)
-            prm2 = self.PRM_merged(date2, offsets=offsets)
+        def prepare_prms(date, offsets):
+            if date == self.reference:
+                return (None, None)
+            prm1 = self.PRM_merged(None, offsets=offsets)
+            prm2 = self.PRM_merged(date, offsets=offsets)
             prm2.set(prm1.SAT_baseline(prm2, tail=9)).fix_aligned()
             prm1.set(prm1.SAT_baseline(prm1).sel('SC_height','SC_height_start','SC_height_end')).fix_aligned()
             return (prm1, prm2)
 
-        prms = joblib.Parallel(n_jobs=-1)(joblib.delayed(prepare_prms)(pair, offsets) for pair in pairs)
+        prms = joblib.Parallel(n_jobs=-1)(joblib.delayed(prepare_prms)(date, offsets) for date in dates)
 
         # fill NaNs by 0 and expand to 3d
         topo2d = da.where(da.isnan(topo.data), 0, topo.data)
@@ -233,11 +233,7 @@ class Stack_topo(Stack_trans_inv):
             dtype=np.complex64
         ) for prm in prms], axis=0)
 
-        coord_pair = [' '.join(pair) for pair in pairs]
-        coord_ref = xr.DataArray(pd.to_datetime(pairs[:,0]), coords={'pair': coord_pair})
-        coord_rep = xr.DataArray(pd.to_datetime(pairs[:,1]), coords={'pair': coord_pair})
-        return xr.DataArray(out, coords={'pair': coord_pair, 'y': topo.y, 'x': topo.x})\
-                .assign_coords(ref=coord_ref, rep=coord_rep, pair=coord_pair).where(da.isfinite(topo)).rename('phase')
+        return xr.DataArray(out, coords={'date': dates, 'y': topo.y, 'x': topo.x}).where(da.isfinite(topo)).rename('phase')
 
     def topo_slope(self, topo='auto', edge_order=1):
         import xarray as xr

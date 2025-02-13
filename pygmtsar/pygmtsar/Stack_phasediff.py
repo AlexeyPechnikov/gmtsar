@@ -460,7 +460,6 @@ class Stack_phasediff(Stack_topo):
 #         coord_rep = xr.DataArray(pd.to_datetime(pairs[:,1]), coords={'pair': coord_pair})
 # 
 #         return xr.concat(stack, dim='pair').assign_coords(ref=coord_ref, rep=coord_rep, pair=coord_pair).rename('phasediff')
-
     def phasediff(self, pairs, data='auto', topo='auto', phase=None, method='nearest', joblib_backend=None, debug=False):
         #import dask
         import dask.array as da
@@ -488,7 +487,7 @@ class Stack_phasediff(Stack_topo):
 
         if (isinstance(topo, xr.DataArray) and topo.name=='topo'):
             topo_grid = utils.interp2d_like(topo, data, method=method, kwargs={'fill_value': 'extrapolate'})
-            phase_topo = self.topo_phase(pairs, topo_grid, grid=data, method=method)
+            phase_topo = self.topo_phase(dates, topo_grid, grid=data, method=method)
             del topo_grid
         elif (isinstance(topo, xr.DataArray) and topo.name=='phase'):
             phase_topo = topo
@@ -496,7 +495,7 @@ class Stack_phasediff(Stack_topo):
             # use zero topography grid
             coords = {key: value for key, value in data[0].coords.items() if key != 'date'}
             notopo = xr.DataArray(da.zeros_like(data[0], dtype=np.float32), coords=coords)
-            phase_topo = self.topo_phase(pairs, notopo, method=method)
+            phase_topo = self.topo_phase(dates, notopo, method=method)
             del notopo
         else:
             # do not apply any correction
@@ -512,8 +511,14 @@ class Stack_phasediff(Stack_topo):
         # calculate phase difference
         data1 = data.sel(date=pairs[:,0]).drop_vars('date').rename({'date': 'pair'})
         data2 = data.sel(date=pairs[:,1]).drop_vars('date').rename({'date': 'pair'})
-        out = (data1 * phase_topo * np.exp(-1j * phase_real) * da.conj(data2)).astype(np.complex64).rename('phase')
-        del phase_topo, phase_real, data1, data2
+
+        phase_topo_ref = phase_topo.sel(date=pairs[:,0]).drop_vars('date').rename({'date': 'pair'})
+        phase_topo_rep = phase_topo.sel(date=pairs[:,1]).drop_vars('date').rename({'date': 'pair'})
+        del phase_topo
+
+        out = (data1 * phase_topo_ref.conj() * np.exp(-1j * phase_real) \
+            * da.conj(data2 * phase_topo_rep.conj())).astype(np.complex64).rename('phase')
+        del phase_topo_ref, phase_topo_rep, phase_real, data1, data2
 
         # # calculate phase difference
         # phase_dask = da.stack([(data.sel(date=pair[0]).drop_vars('date') \
@@ -522,13 +527,11 @@ class Stack_phasediff(Stack_topo):
         # out = xr.DataArray(phase_dask, coords=phase_topo.coords)
         # del phase_topo, phase_real, phase_dask
 
-        if not isinstance(topo, xr.DataArray):
-            # append coordinates which usually added from topo phase dataarray
-            coord_pair = [' '.join(pair) for pair in pairs]
-            coord_ref = xr.DataArray(pd.to_datetime(pairs[:,0]), coords={'pair': coord_pair})
-            coord_rep = xr.DataArray(pd.to_datetime(pairs[:,1]), coords={'pair': coord_pair})
-            return out.assign_coords(ref=coord_ref, rep=coord_rep, pair=coord_pair)
-        return out
+        # append coordinates which usually added from topo phase dataarray
+        coord_pair = [' '.join(pair) for pair in pairs]
+        coord_ref = xr.DataArray(pd.to_datetime(pairs[:,0]), coords={'pair': coord_pair})
+        coord_rep = xr.DataArray(pd.to_datetime(pairs[:,1]), coords={'pair': coord_pair})
+        return out.assign_coords(ref=coord_ref, rep=coord_rep, pair=coord_pair)
 
     def goldstein(self, phase, corr, psize=32, debug=False):
         import xarray as xr
